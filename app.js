@@ -3,14 +3,8 @@ const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 
-const OPAY_NAME =
-  process.env.OPAY_ACCOUNT_NAME || "Akinremi Taiwo Zaccheaus";
-
-const OPAY_NUMBER =
-  process.env.OPAY_ACCOUNT_NUMBER || "9047073591";
-
-const users = [];
-const orders = [];
+const OPAY_ACCOUNT_NAME = process.env.OPAY_ACCOUNT_NAME || "";
+const OPAY_ACCOUNT_NUMBER = process.env.OPAY_ACCOUNT_NUMBER || "";
 
 const services = [
   { id: 1, name: "Plumber", price: 15000 },
@@ -19,45 +13,63 @@ const services = [
   { id: 4, name: "Home Cleaning", price: 8000 }
 ];
 
+const users = [];
+const orders = [];
+
 function hashPassword(password) {
-  return crypto
-    .createHash("sha256")
-    .update(password)
-    .digest("hex");
+  return crypto.createHash("sha256").update(password).digest("hex");
 }
 
-function sendJSON(res, status, data) {
+function sendJson(res, status, data) {
+  const body = JSON.stringify(data);
+
   res.writeHead(status, {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(body)
   });
-  res.end(JSON.stringify(data));
+
+  res.end(body);
 }
 
-function getBody(req, callback) {
-  let body = "";
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
 
-  req.on("data", chunk => {
-    body += chunk;
-  });
+    req.on("data", chunk => {
+      body += chunk;
 
-  req.on("end", () => {
-    try {
-      callback(JSON.parse(body));
-    } catch {
-      callback(null);
-    }
+      if (body.length > 1000000) {
+        req.destroy();
+        reject(new Error("Request too large"));
+      }
+    });
+
+    req.on("end", () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+
+    req.on("error", reject);
   });
 }
 
 function page() {
-  return `
-<!DOCTYPE html>
-<html>
+  const safeServices = JSON.stringify(services);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+
 <head>
 
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
 
-<title>Ibadan Business</title>
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Ibadan Business Hub</title>
 
 <style>
 
@@ -68,102 +80,118 @@ function page() {
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #f4f6f8;
-  color: #222;
+  background: #f5f7fb;
+  color: #172033;
 }
 
 header {
   background: #111827;
   color: white;
-  padding: 25px 15px;
+  padding: 22px 16px;
   text-align: center;
 }
 
+header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+header p {
+  margin: 0;
+  color: #d1d5db;
+}
+
 .container {
-  max-width: 850px;
+  max-width: 900px;
   margin: auto;
-  padding: 20px;
+  padding: 18px;
 }
 
 .card {
   background: white;
+  border-radius: 16px;
   padding: 20px;
-  margin: 15px 0;
-  border-radius: 14px;
-  box-shadow: 0 3px 12px #0001;
+  margin: 16px 0;
+  box-shadow: 0 4px 18px rgba(0,0,0,.08);
+}
+
+h2 {
+  margin-top: 0;
 }
 
 input,
-select {
+select,
+button {
   width: 100%;
   padding: 13px;
-  margin: 8px 0;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  margin: 7px 0;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 16px;
 }
 
 button {
-  border: none;
-  border-radius: 8px;
-  padding: 13px 18px;
   background: #111827;
   color: white;
+  border: 0;
   cursor: pointer;
+  font-weight: bold;
 }
 
-button:hover {
-  opacity: .9;
+button.secondary {
+  background: #e5e7eb;
+  color: #111827;
 }
 
-.green {
-  background: #16803c;
+.service-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.service {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.price {
+  font-weight: bold;
+  font-size: 19px;
 }
 
 .hidden {
   display: none;
 }
 
-.service {
-  border: 1px solid #ddd;
-  border-radius: 10px;
+.payment-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   padding: 15px;
-  margin: 10px 0;
+  border-radius: 12px;
+  margin-top: 10px;
 }
 
-.price {
-  font-size: 20px;
-  font-weight: bold;
-}
-
-.payment-option {
-  border: 1px solid #ddd;
+.message {
+  padding: 12px;
   border-radius: 10px;
-  padding: 18px;
-  margin: 10px 0;
-  cursor: pointer;
-}
-
-.payment-option:hover {
-  background: #f3f4f6;
-}
-
-.transfer {
-  background: #f3f4f6;
-  padding: 18px;
-  border-radius: 10px;
-  margin-top: 15px;
-}
-
-.amount {
-  font-size: 25px;
-  font-weight: bold;
+  margin-top: 10px;
 }
 
 .success {
   background: #dcfce7;
-  padding: 15px;
-  border-radius: 10px;
-  margin-top: 15px;
+  color: #166534;
+}
+
+.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.small {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 </style>
@@ -172,262 +200,175 @@ button:hover {
 
 <body>
 
+<header>
 
-<!-- LOGIN PAGE -->
+<h1>Ibadan Business Hub</h1>
 
-<div id="loginPage" class="container">
+<p>Book trusted local services</p>
 
-  <div class="card">
+</header>
 
-    <h1>Ibadan Business</h1>
+<div class="container">
 
-    <h2>Login</h2>
+<div class="card">
 
-    <input
-      id="loginEmail"
-      type="email"
-      placeholder="Email"
-    >
+<h2>Create Account / Login</h2>
 
-    <input
-      id="loginPassword"
-      type="password"
-      placeholder="Password"
-    >
+<input
+id="name"
+placeholder="Full name">
 
-    <button onclick="login()">
-      Login
-    </button>
+<input
+id="email"
+type="email"
+placeholder="Email">
 
-    <p id="loginMessage"></p>
+<input
+id="password"
+type="password"
+placeholder="Password">
 
-    <hr>
+<button onclick="signup()">
+Create Account
+</button>
 
-    <h2>Create Account</h2>
+<button
+class="secondary"
+onclick="login()">
+Login
+</button>
 
-    <input
-      id="signupName"
-      placeholder="Full name"
-    >
-
-    <input
-      id="signupEmail"
-      type="email"
-      placeholder="Email"
-    >
-
-    <input
-      id="signupPassword"
-      type="password"
-      placeholder="Password"
-    >
-
-    <button onclick="signup()">
-      Create Account
-    </button>
-
-    <p id="signupMessage"></p>
-
-  </div>
+<div id="authMessage"></div>
 
 </div>
 
 
-<!-- WEBSITE -->
+<div class="card">
 
-<div id="website" class="hidden">
+<h2>Available Services</h2>
 
-<header>
+<div
+id="services"
+class="service-grid">
+</div>
 
-  <h1>Ibadan Business</h1>
+</div>
 
-  <p>Professional services at your convenience</p>
 
-  <button onclick="logout()">
-    Logout
-  </button>
+<div
+class="card"
+id="customer">
 
-</header>
+<h2>Book a Service</h2>
 
+<select id="service">
 
-<div class="container">
+<option value="">
+Select a service
+</option>
 
+</select>
 
-  <!-- SERVICES -->
+<input
+id="customerName"
+placeholder="Your name">
 
-  <div class="card">
+<input
+id="phone"
+placeholder="Phone number">
 
-    <h2>Our Services</h2>
+<input
+id="address"
+placeholder="Service address">
 
-    <div id="services"></div>
+<button onclick="bookService()">
+Book Service
+</button>
 
-  </div>
+<div id="bookingMessage"></div>
 
+</div>
 
-  <!-- BOOKING -->
 
-  <div class="card">
+<div class="card">
 
-    <h2>Book a Service</h2>
+<h2>Payment</h2>
 
-    <input
-      id="customer"
-      placeholder="Your name"
-    >
+<p id="orderText">
+Create a booking first.
+</p>
 
-    <input
-      id="phone"
-      placeholder="Phone number"
-    >
+<select
+id="paymentMethod"
+onchange="showPayment()">
 
-    <select id="service">
+<option value="">
+Choose payment method
+</option>
 
-      ${services.map(service => `
-        <option value="${service.id}">
-          ${service.name} - ₦${service.price.toLocaleString()}
-        </option>
-      `).join("")}
+<option value="bank">
+Bank Transfer / OPay
+</option>
 
-    </select>
+<option value="opay">
+OPay Online
+</option>
 
-    <button onclick="bookService()">
-      Book Service
-    </button>
+</select>
 
-    <p id="message"></p>
 
-  </div>
+<div
+id="bankTransfer"
+class="payment-box hidden">
 
+<h3>Transfer to OPay</h3>
 
-  <!-- PAYMENT -->
+<p>
+<strong>Provider:</strong>
+OPay
+</p>
 
-  <div
-    id="paymentSection"
-    class="card hidden"
-  >
+<p>
+<strong>Account name:</strong>
+${OPAY_ACCOUNT_NAME || "Payment account configured by administrator"}
+</p>
 
-    <h2>Complete Your Payment</h2>
+<p>
+<strong>Account number:</strong>
+${OPAY_ACCOUNT_NUMBER || "Payment account configured by administrator"}
+</p>
 
-    <p>Your total is:</p>
+<p class="small">
+After making the transfer, tap the button below.
+This sends a payment notice to the website.
+It does not automatically verify the bank transfer.
+</p>
 
-    <p
-      id="paymentAmount"
-      class="amount"
-    ></p>
+<button onclick="paymentMade()">
+I Have Made The Transfer
+</button>
 
+</div>
 
-    <h3>Choose Payment Method</h3>
 
+<div
+id="opayPayment"
+class="payment-box hidden">
 
-    <div
-      class="payment-option"
-      onclick="showBankTransfer()"
-    >
+<h3>OPay Online Payment</h3>
 
-      <b>🏦 Bank Transfer</b>
+<p>
+Online OPay gateway is not connected yet.
+</p>
 
-      <br>
+<p class="small">
+Use Bank Transfer / OPay above until a
+verified payment gateway is connected.
+</p>
 
-      Pay by transferring the exact amount.
+</div>
 
-    </div>
-
-
-    <div
-      class="payment-option"
-      onclick="showOpay()"
-    >
-
-      <b>📱 OPay</b>
-
-      <br>
-
-      Continue with OPay.
-
-    </div>
-
-
-    <!-- BANK TRANSFER -->
-
-    <div
-      id="bankTransfer"
-      class="hidden"
-    >
-
-      <div class="transfer">
-
-        <h3>Bank Transfer</h3>
-
-        <p>
-          Transfer the exact amount to:
-        </p>
-
-        <p>
-          <b>Provider:</b> OPay
-        </p>
-
-        <p>
-          <b>Account Name:</b>
-          ${OPAY_NAME}
-        </p>
-
-        <p>
-          <b>Account Number:</b>
-          ${OPAY_NUMBER}
-        </p>
-
-        <button
-          class="green"
-          onclick="paymentMade()"
-        >
-          I Have Made The Transfer
-        </button>
-
-      </div>
-
-    </div>
-
-
-    <!-- OPAY -->
-
-    <div
-      id="opayPayment"
-      class="hidden"
-    >
-
-      <div class="transfer">
-
-        <h3>OPay Payment</h3>
-
-        <p>
-          Amount:
-        </p>
-
-        <p
-          id="opayAmount"
-          class="amount"
-        ></p>
-
-        <p>
-          OPay online payment integration
-          can be connected here.
-        </p>
-
-        <button
-          class="green"
-          onclick="paymentMade()"
-        >
-          Continue
-        </button>
-
-      </div>
-
-    </div>
-
-
-    <div id="paymentMessage"></div>
-
-  </div>
+<div id="paymentMessage"></div>
 
 </div>
 
@@ -436,247 +377,372 @@ button:hover {
 
 <script>
 
-let loggedIn = false;
 let currentOrder = null;
 
+const services = ${safeServices};
 
-/* CREATE ACCOUNT */
 
-async function signup() {
+function showMessage(id, text, ok) {
+
+  document.getElementById(id).innerHTML =
+    '<div class="message ' +
+    (ok ? 'success' : 'error') +
+    '">' +
+    text +
+    '</div>';
+
+}
+
+
+function signup() {
 
   const name =
-    document.getElementById("signupName")
-      .value.trim();
+    document.getElementById("name")
+    .value.trim();
 
   const email =
-    document.getElementById("signupEmail")
-      .value.trim();
+    document.getElementById("email")
+    .value.trim();
 
   const password =
-    document.getElementById("signupPassword")
-      .value;
+    document.getElementById("password")
+    .value;
 
-  if (!name || !email || !password) {
+  fetch("/api/signup", {
 
-    document.getElementById("signupMessage")
-      .textContent =
-      "Please fill in all fields.";
+    method: "POST",
 
-    return;
-  }
+    headers: {
+      "Content-Type":
+        "application/json"
+    },
 
-  const response =
-    await fetch("/api/signup", {
+    body: JSON.stringify({
+      name,
+      email,
+      password
+    })
 
-      method: "POST",
+  })
 
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
+  .then(response => response.json())
 
-      body: JSON.stringify({
-        name,
-        email,
-        password
-      })
+  .then(result => {
 
-    });
+    showMessage(
+      "authMessage",
+      result.message,
+      result.success
+    );
 
-  const result =
-    await response.json();
+  })
 
-  document.getElementById("signupMessage")
-    .textContent =
-    result.message;
+  .catch(() => {
+
+    showMessage(
+      "authMessage",
+      "Could not connect to the server.",
+      false
+    );
+
+  });
+
 }
 
 
-/* LOGIN */
-
-async function login() {
+function login() {
 
   const email =
-    document.getElementById("loginEmail")
-      .value.trim();
+    document.getElementById("email")
+    .value.trim();
 
   const password =
-    document.getElementById("loginPassword")
-      .value;
+    document.getElementById("password")
+    .value;
 
-  const response =
-    await fetch("/api/login", {
+  fetch("/api/login", {
 
-      method: "POST",
+    method: "POST",
 
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
+    headers: {
+      "Content-Type":
+        "application/json"
+    },
 
-      body: JSON.stringify({
-        email,
-        password
-      })
+    body: JSON.stringify({
+      email,
+      password
+    })
 
-    });
+  })
 
-  const result =
-    await response.json();
+  .then(response => response.json())
 
-  if (result.success) {
+  .then(result => {
 
-    loggedIn = true;
+    showMessage(
+      "authMessage",
+      result.message,
+      result.success
+    );
 
-    document.getElementById("loginPage")
-      .classList.add("hidden");
+    if (result.success && result.user) {
 
-    document.getElementById("website")
-      .classList.remove("hidden");
+      document.getElementById(
+        "customerName"
+      ).value = result.user.name;
 
-    document.getElementById("customer")
-      .value = result.name;
+    }
 
-  } else {
+  })
 
-    document.getElementById("loginMessage")
-      .textContent =
-      result.message;
+  .catch(() => {
 
-  }
+    showMessage(
+      "authMessage",
+      "Could not connect to the server.",
+      false
+    );
+
+  });
+
 }
 
 
-/* LOGOUT */
+function renderServices() {
 
-function logout() {
+  const container =
+    document.getElementById("services");
 
-  loggedIn = false;
+  container.innerHTML =
+    services.map(service => {
 
-  document.getElementById("website")
-    .classList.add("hidden");
+      return (
+        '<div class="service">' +
 
-  document.getElementById("loginPage")
-    .classList.remove("hidden");
+        '<h3>' +
+        service.name +
+        '</h3>' +
+
+        '<p class="price">₦' +
+        service.price.toLocaleString() +
+        '</p>' +
+
+        '<button onclick="selectService(' +
+        service.id +
+        ')">' +
+
+        'Select' +
+
+        '</button>' +
+
+        '</div>'
+      );
+
+    }).join("");
+
+
+  const select =
+    document.getElementById("service");
+
+
+  services.forEach(service => {
+
+    const option =
+      document.createElement("option");
+
+    option.value = service.id;
+
+    option.textContent =
+      service.name +
+      " - ₦" +
+      service.price.toLocaleString();
+
+    select.appendChild(option);
+
+  });
+
 }
 
 
-/* BOOK SERVICE */
+function selectService(id) {
 
-async function bookService() {
+  document.getElementById(
+    "service"
+  ).value = id;
 
-  const customer =
-    document.getElementById("customer")
-      .value.trim();
+  document.getElementById(
+    "customer"
+  ).scrollIntoView({
+    behavior: "smooth"
+  });
 
-  const phone =
-    document.getElementById("phone")
-      .value.trim();
+}
+
+
+function bookService() {
 
   const serviceId =
     Number(
       document.getElementById("service")
-        .value
+      .value
     );
 
-  if (!customer || !phone) {
+  const name =
+    document.getElementById(
+      "customerName"
+    ).value.trim();
 
-    document.getElementById("message")
-      .textContent =
-      "Please enter your name and phone number.";
+  const phone =
+    document.getElementById(
+      "phone"
+    ).value.trim();
 
-    return;
-  }
+  const address =
+    document.getElementById(
+      "address"
+    ).value.trim();
 
-  const response =
-    await fetch("/api/orders", {
 
-      method: "POST",
+  if (
+    !serviceId ||
+    !name ||
+    !phone ||
+    !address
+  ) {
 
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
-
-      body: JSON.stringify({
-        customer,
-        phone,
-        serviceId
-      })
-
-    });
-
-  const result =
-    await response.json();
-
-  if (!result.success) {
-
-    document.getElementById("message")
-      .textContent =
-      result.message;
+    showMessage(
+      "bookingMessage",
+      "Please complete all booking fields.",
+      false
+    );
 
     return;
   }
 
-  currentOrder =
-    result.order;
 
-  document.getElementById("message")
-    .textContent =
-    "Booking created successfully.";
+  fetch("/api/orders", {
 
-  document.getElementById("paymentSection")
-    .classList.remove("hidden");
+    method: "POST",
 
-  document.getElementById("paymentAmount")
-    .textContent =
-    "₦" +
-    result.order.price.toLocaleString();
+    headers: {
+      "Content-Type":
+        "application/json"
+    },
 
-  document.getElementById("opayAmount")
-    .textContent =
-    "₦" +
-    result.order.price.toLocaleString();
+    body: JSON.stringify({
+      serviceId,
+      name,
+      phone,
+      address
+    })
 
-  document.getElementById("paymentSection")
-    .scrollIntoView({
-      behavior: "smooth"
-    });
+  })
+
+  .then(response => response.json())
+
+  .then(result => {
+
+    if (result.success) {
+
+      currentOrder =
+        result.order;
+
+      document.getElementById(
+        "orderText"
+      ).textContent =
+        "Order #" +
+        result.order.id +
+        " created. Amount: ₦" +
+        result.order.amount.toLocaleString();
+
+
+      showMessage(
+        "bookingMessage",
+        result.message,
+        true
+      );
+
+    } else {
+
+      showMessage(
+        "bookingMessage",
+        result.message,
+        false
+      );
+
+    }
+
+  })
+
+  .catch(() => {
+
+    showMessage(
+      "bookingMessage",
+      "Could not create the booking.",
+      false
+    );
+
+  });
+
 }
 
 
-/* PAYMENT OPTIONS */
+function showPayment() {
 
-function showBankTransfer() {
+  const method =
+    document.getElementById(
+      "paymentMethod"
+    ).value;
 
-  document.getElementById("bankTransfer")
-    .classList.remove("hidden");
 
-  document.getElementById("opayPayment")
-    .classList.add("hidden");
+  document.getElementById(
+    "bankTransfer"
+  ).classList.add("hidden");
+
+
+  document.getElementById(
+    "opayPayment"
+  ).classList.add("hidden");
+
+
+  if (method === "bank") {
+
+    document.getElementById(
+      "bankTransfer"
+    ).classList.remove("hidden");
+
+  }
+
+
+  if (method === "opay") {
+
+    document.getElementById(
+      "opayPayment"
+    ).classList.remove("hidden");
+
+  }
+
 }
 
 
-function showOpay() {
-
-  document.getElementById("opayPayment")
-    .classList.remove("hidden");
-
-  document.getElementById("bankTransfer")
-    .classList.add("hidden");
-}
-
-
-/* PAYMENT NOTICE */
-
-async function paymentMade() {
+function paymentMade() {
 
   if (!currentOrder) {
+
+    showMessage(
+      "paymentMessage",
+      "Please create a booking first.",
+      false
+    );
+
     return;
   }
 
-  const response =
-    await fetch("/api/payment-notice", {
+
+  fetch(
+    "/api/payment-notice",
+    {
 
       method: "POST",
 
@@ -690,395 +756,416 @@ async function paymentMade() {
           currentOrder.id
       })
 
-    });
+    }
+  )
 
-  const result =
-    await response.json();
+  .then(response =>
+    response.json()
+  )
 
-  document.getElementById("paymentMessage")
-    .innerHTML =
-    '<div class="success">' +
-    result.message +
-    '</div>';
+  .then(result => {
+
+    showMessage(
+      "paymentMessage",
+      result.message,
+      result.success
+    );
+
+  })
+
+  .catch(() => {
+
+    showMessage(
+      "paymentMessage",
+      "Could not send payment notice.",
+      false
+    );
+
+  });
+
 }
 
 
-/* SERVICES */
-
-const services =
-  ${JSON.stringify(services)};
-
-document.getElementById("services")
-  .innerHTML =
-
-  services.map(service => `
-
-    <div class="service">
-
-      <h3>
-        \${service.name}
-      </h3>
-
-      <p class="price">
-        ₦\${service.price.toLocaleString()}
-      </p>
-
-      <button
-        onclick="selectService(\${service.id})"
-      >
-        Select
-      </button>
-
-    </div>
-
-  `).join("");
-
-
-function selectService(id) {
-
-  document.getElementById("service")
-    .value = id;
-
-  document.getElementById("customer")
-    .scrollIntoView({
-      behavior: "smooth"
-    });
-}
+renderServices();
 
 </script>
 
 </body>
-</html>
-`;
+
+</html>`;
 }
 
 
-/* SERVER */
-
 const server =
-  http.createServer((req, res) => {
+  http.createServer(
+    async (req, res) => {
+
+      try {
+
+        if (
+          req.method === "GET" &&
+          req.url === "/"
+        ) {
+
+          const body = page();
+
+          res.writeHead(
+            200,
+            {
+              "Content-Type":
+                "text/html; charset=utf-8"
+            }
+          );
+
+          res.end(body);
+
+          return;
+        }
 
 
-  /* HOME */
+        if (
+          req.method === "POST" &&
+          req.url === "/api/signup"
+        ) {
 
-  if (
-    req.method === "GET" &&
-    req.url === "/"
-  ) {
+          const data =
+            await readBody(req);
 
-    res.writeHead(200, {
-      "Content-Type":
-        "text/html"
-    });
+          const name =
+            String(data.name || "")
+            .trim();
 
-    res.end(page());
+          const email =
+            String(data.email || "")
+            .trim()
+            .toLowerCase();
 
-    return;
-  }
-
-
-  /* SIGN UP */
-
-  if (
-    req.method === "POST" &&
-    req.url === "/api/signup"
-  ) {
-
-    getBody(req, data => {
-
-      if (
-        !data ||
-        !data.name ||
-        !data.email ||
-        !data.password
-      ) {
-
-        sendJSON(res, 400, {
-          message:
-            "Please fill in all fields."
-        });
-
-        return;
-      }
+          const password =
+            String(data.password || "");
 
 
-      const email =
-        data.email.toLowerCase();
+          if (
+            !name ||
+            !email ||
+            !password
+          ) {
+
+            sendJson(
+              res,
+              400,
+              {
+                success: false,
+                message:
+                  "Please fill in all fields."
+              }
+            );
+
+            return;
+          }
 
 
-      if (
-        users.some(
-          user =>
-            user.email === email
-        )
-      ) {
-
-        sendJSON(res, 400, {
-          message:
-            "An account with this email already exists."
-        });
-
-        return;
-      }
-
-
-      users.push({
-
-        name:
-          data.name,
-
-        email:
-          email,
-
-        password:
-          hashPassword(data.password)
-
-      });
-
-
-      sendJSON(res, 200, {
-
-        message:
-          "Account created! You can now log in."
-
-      });
-
-    });
-
-    return;
-  }
-
-
-  /* LOGIN */
-
-  if (
-    req.method === "POST" &&
-    req.url === "/api/login"
-  ) {
-
-    getBody(req, data => {
-
-      if (!data) {
-
-        sendJSON(res, 400, {
-          success: false,
-          message:
-            "Invalid request."
-        });
-
-        return;
-      }
-
-
-      const email =
-        String(
-          data.email || ""
-        ).toLowerCase();
-
-
-      const user =
-        users.find(
-          user =>
-            user.email === email &&
-            user.password ===
-            hashPassword(
-              data.password || ""
+          if (
+            users.some(
+              user =>
+                user.email === email
             )
+          ) {
+
+            sendJson(
+              res,
+              400,
+              {
+                success: false,
+                message:
+                  "An account with this email already exists."
+              }
+            );
+
+            return;
+          }
+
+
+          users.push({
+
+            id:
+              crypto.randomUUID(),
+
+            name,
+
+            email,
+
+            password:
+              hashPassword(password)
+
+          });
+
+
+          sendJson(
+            res,
+            201,
+            {
+              success: true,
+              message:
+                "Account created successfully."
+            }
+          );
+
+          return;
+        }
+
+
+        if (
+          req.method === "POST" &&
+          req.url === "/api/login"
+        ) {
+
+          const data =
+            await readBody(req);
+
+          const email =
+            String(data.email || "")
+            .trim()
+            .toLowerCase();
+
+          const password =
+            String(data.password || "");
+
+
+          const user =
+            users.find(
+              item =>
+                item.email === email &&
+                item.password ===
+                  hashPassword(password)
+            );
+
+
+          if (!user) {
+
+            sendJson(
+              res,
+              401,
+              {
+                success: false,
+                message:
+                  "Incorrect email or password."
+              }
+            );
+
+            return;
+          }
+
+
+          sendJson(
+            res,
+            200,
+            {
+              success: true,
+              message:
+                "Login successful.",
+
+              user: {
+                name: user.name,
+                email: user.email
+              }
+            }
+          );
+
+          return;
+        }
+
+
+        if (
+          req.method === "POST" &&
+          req.url === "/api/orders"
+        ) {
+
+          const data =
+            await readBody(req);
+
+
+          const service =
+            services.find(
+              item =>
+                item.id ===
+                Number(data.serviceId)
+            );
+
+
+          if (!service) {
+
+            sendJson(
+              res,
+              400,
+              {
+                success: false,
+                message:
+                  "Please select a valid service."
+              }
+            );
+
+            return;
+          }
+
+
+          if (
+            !data.name ||
+            !data.phone ||
+            !data.address
+          ) {
+
+            sendJson(
+              res,
+              400,
+              {
+                success: false,
+                message:
+                  "Please complete all booking fields."
+              }
+            );
+
+            return;
+          }
+
+
+          const order = {
+
+            id:
+              crypto.randomUUID(),
+
+            serviceId:
+              service.id,
+
+            service:
+              service.name,
+
+            amount:
+              service.price,
+
+            name:
+              String(data.name),
+
+            phone:
+              String(data.phone),
+
+            address:
+              String(data.address),
+
+            paymentStatus:
+              "Pending",
+
+            createdAt:
+              new Date().toISOString()
+
+          };
+
+
+          orders.push(order);
+
+
+          sendJson(
+            res,
+            201,
+            {
+              success: true,
+              message:
+                "Booking created successfully.",
+              order
+            }
+          );
+
+          return;
+        }
+
+
+        if (
+          req.method === "POST" &&
+          req.url ===
+            "/api/payment-notice"
+        ) {
+
+          const data =
+            await readBody(req);
+
+
+          const order =
+            orders.find(
+              item =>
+                item.id ===
+                data.orderId
+            );
+
+
+          if (!order) {
+
+            sendJson(
+              res,
+              404,
+              {
+                success: false,
+                message:
+                  "Order not found."
+              }
+            );
+
+            return;
+          }
+
+
+          order.paymentStatus =
+            "Customer reported transfer";
+
+
+          sendJson(
+            res,
+            200,
+            {
+              success: true,
+              message:
+                "Payment notice received. The transfer still needs to be verified."
+            }
+          );
+
+          return;
+        }
+
+
+        sendJson(
+          res,
+          404,
+          {
+            success: false,
+            message:
+              "Page not found."
+          }
         );
 
+      } catch (error) {
 
-      if (!user) {
+        console.error(error);
 
-        sendJSON(res, 401, {
-
-          success: false,
-
-          message:
-            "Incorrect email or password."
-
-        });
-
-        return;
-      }
-
-
-      sendJSON(res, 200, {
-
-        success: true,
-
-        name:
-          user.name
-
-      });
-
-    });
-
-    return;
-  }
-
-
-  /* ORDERS */
-
-  if (
-    req.method === "POST" &&
-    req.url === "/api/orders"
-  ) {
-
-    getBody(req, data => {
-
-      if (!data) {
-
-        sendJSON(res, 400, {
-
-          success: false,
-
-          message:
-            "Invalid request."
-
-        });
-
-        return;
-      }
-
-
-      const service =
-        services.find(
-          service =>
-            service.id ===
-            Number(data.serviceId)
+        sendJson(
+          res,
+          500,
+          {
+            success: false,
+            message:
+              "Server error."
+          }
         );
 
-
-      if (!service) {
-
-        sendJSON(res, 400, {
-
-          success: false,
-
-          message:
-            "Invalid service."
-
-        });
-
-        return;
       }
 
-
-      const order = {
-
-        id:
-          orders.length + 1,
-
-        customer:
-          data.customer,
-
-        phone:
-          data.phone,
-
-        service:
-          service.name,
-
-        price:
-          service.price,
-
-        paymentNotice:
-          false,
-
-        date:
-          new Date().toISOString()
-
-      };
-
-
-      orders.push(order);
-
-
-      sendJSON(res, 200, {
-
-        success: true,
-
-        order:
-          order
-
-      });
-
-    });
-
-    return;
-  }
-
-
-  /* PAYMENT NOTICE */
-
-  if (
-    req.method === "POST" &&
-    req.url === "/api/payment-notice"
-  ) {
-
-    getBody(req, data => {
-
-      if (!data) {
-
-        sendJSON(res, 400, {
-
-          message:
-            "Invalid request."
-
-        });
-
-        return;
-      }
-
-
-      const order =
-        orders.find(
-          order =>
-            order.id ===
-            Number(data.orderId)
-        );
-
-
-      if (!order) {
-
-        sendJSON(res, 404, {
-
-          message:
-            "Order not found."
-
-        });
-
-        return;
-      }
-
-
-      order.paymentNotice = true;
-
-
-      sendJSON(res, 200, {
-
-        message:
-          "Payment notice received. Your payment will be verified before the order is confirmed."
-
-      });
-
-    });
-
-    return;
-  }
-
-
-  res.writeHead(404);
-
-  res.end("Page not found");
-
-});
-
-
-server.listen(PORT, () => {
-
-  console.log(
-    "Server running on port " +
-    PORT
+    }
   );
 
-});app.js
+
+server.listen(
+  PORT,
+  () => {
+    console.log(
+      "Ibadan Business Hub running on port " +
+      PORT
+    );
+  }
+);
