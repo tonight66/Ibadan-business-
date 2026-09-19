@@ -3,50 +3,153 @@ const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 
-const OPAY_ACCOUNT_NAME = process.env.OPAY_ACCOUNT_NAME || "";
-const OPAY_ACCOUNT_NUMBER = process.env.OPAY_ACCOUNT_NUMBER || "";
+const OPAY_ACCOUNT_NAME =
+  process.env.OPAY_ACCOUNT_NAME || "";
+
+const OPAY_ACCOUNT_NUMBER =
+  process.env.OPAY_ACCOUNT_NUMBER || "";
 
 const services = [
-  { id: 1, name: "Plumber", price: 15000 },
-  { id: 2, name: "Tailor", price: 10000 },
-  { id: 3, name: "Electrician", price: 12000 },
-  { id: 4, name: "Home Cleaning", price: 8000 }
+  {
+    id: 1,
+    category: "Plumbing",
+    name: "Plumber",
+    price: 15000,
+    description:
+      "Leaks, pipe repairs, installations and plumbing work."
+  },
+  {
+    id: 2,
+    category: "Electrical",
+    name: "Electrician",
+    price: 12000,
+    description:
+      "Wiring, sockets, lights, switches and electrical repairs."
+  },
+  {
+    id: 3,
+    category: "Cleaning",
+    name: "Home Cleaning",
+    price: 8000,
+    description:
+      "Home and office cleaning services."
+  },
+  {
+    id: 4,
+    category: "Tailoring",
+    name: "Tailor",
+    price: 10000,
+    description:
+      "Clothing adjustments, sewing and custom outfits."
+  },
+  {
+    id: 5,
+    category: "Painting",
+    name: "Painter",
+    price: 18000,
+    description:
+      "Interior and exterior painting services."
+  },
+  {
+    id: 6,
+    category: "Carpentry",
+    name: "Carpenter",
+    price: 15000,
+    description:
+      "Furniture, doors, shelves and woodwork."
+  },
+  {
+    id: 7,
+    category: "Laundry",
+    name: "Laundry Service",
+    price: 5000,
+    description:
+      "Washing, ironing and clothing care."
+  },
+  {
+    id: 8,
+    category: "Technology",
+    name: "Phone & Computer Repair",
+    price: 7000,
+    description:
+      "Device diagnostics, repairs and setup."
+  },
+  {
+    id: 9,
+    category: "Beauty",
+    name: "Hair & Barbing",
+    price: 4000,
+    description:
+      "Hair styling, barbing and grooming."
+  },
+  {
+    id: 10,
+    category: "Catering",
+    name: "Catering",
+    price: 20000,
+    description:
+      "Small-event meals and food services."
+  },
+  {
+    id: 11,
+    category: "Photography",
+    name: "Photography",
+    price: 25000,
+    description:
+      "Event and portrait photography."
+  },
+  {
+    id: 12,
+    category: "Auto",
+    name: "Auto Mechanic",
+    price: 10000,
+    description:
+      "Vehicle inspection, servicing and repairs."
+  },
+  {
+    id: 13,
+    category: "Moving",
+    name: "Moving Service",
+    price: 20000,
+    description:
+      "Local moving and transportation assistance."
+  },
+  {
+    id: 14,
+    category: "Building",
+    name: "Building & Renovation",
+    price: 30000,
+    description:
+      "Masonry, renovation and general building work."
+  }
 ];
 
-const users = [];
+const pending = new Map();
+const sessions = new Map();
 const orders = [];
 
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
-
-function sendJson(res, status, data) {
-  const body = JSON.stringify(data);
+function json(res, status, data) {
+  const output = JSON.stringify(data);
 
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Content-Length": Buffer.byteLength(body)
+    "Content-Length": Buffer.byteLength(output)
   });
 
-  res.end(body);
+  res.end(output);
 }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    let data = "";
 
     req.on("data", chunk => {
-      body += chunk;
-
-      if (body.length > 1000000) {
-        req.destroy();
-        reject(new Error("Request too large"));
-      }
+      data += chunk;
     });
 
     req.on("end", () => {
       try {
-        resolve(body ? JSON.parse(body) : {});
+        resolve(data ? JSON.parse(data) : {});
       } catch {
         reject(new Error("Invalid JSON"));
       }
@@ -57,19 +160,21 @@ function readBody(req) {
 }
 
 function page() {
-  const safeServices = JSON.stringify(services);
+  const serviceData = JSON.stringify(services);
 
   return `<!DOCTYPE html>
-<html lang="en">
+
+<html>
 
 <head>
 
 <meta charset="UTF-8">
 
-<meta name="viewport"
+<meta
+name="viewport"
 content="width=device-width, initial-scale=1.0">
 
-<title>Ibadan Business Hub</title>
+<title>Ibadan Services</title>
 
 <style>
 
@@ -81,117 +186,226 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #f5f7fb;
-  color: #172033;
+  color: #182033;
 }
 
-header {
+#login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      #111827,
+      #334155
+    );
+}
+
+.login-box {
+  width: min(430px, 100%);
+  background: white;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 20px 60px #0005;
+}
+
+.logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
   background: #111827;
   color: white;
-  padding: 22px 16px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+  font-weight: 800;
+  margin-bottom: 18px;
 }
 
-header h1 {
-  margin: 0 0 6px;
-  font-size: 28px;
+.login-box h1 {
+  margin: 0 0 8px;
 }
 
-header p {
-  margin: 0;
-  color: #d1d5db;
+.muted {
+  color: #667085;
 }
 
-.container {
-  max-width: 900px;
+.field {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d9dee8;
+  border-radius: 12px;
+  margin: 8px 0;
+  outline: none;
+}
+
+.primary {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  background: #111827;
+  color: white;
+  font-weight: 700;
+  margin-top: 8px;
+  border: 0;
+}
+
+.note {
+  font-size: 12px;
+  color: #667085;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.err {
+  color: #b42318;
+  margin-top: 10px;
+}
+
+.ok {
+  color: #067647;
+  margin-top: 10px;
+}
+
+#app {
+  display: none;
+}
+
+.top {
+  background: #111827;
+  color: white;
+  padding: 18px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.nav {
+  max-width: 1100px;
   margin: auto;
-  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav button {
+  background: white;
+  color: #111827;
+  padding: 9px 13px;
+  border-radius: 10px;
+  border: 0;
+}
+
+.wrap {
+  max-width: 1100px;
+  margin: auto;
+  padding: 22px 16px;
+}
+
+.hero {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+.search {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d9dee8;
+  border-radius: 12px;
+  margin-top: 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 0;
+}
+
+.chip {
+  white-space: nowrap;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: #e9edf3;
+  border: 0;
+}
+
+.chip.active {
+  background: #111827;
+  color: white;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
 }
 
 .card {
   background: white;
-  border-radius: 16px;
-  padding: 20px;
-  margin: 16px 0;
-  box-shadow: 0 4px 18px rgba(0,0,0,.08);
-}
-
-h2 {
-  margin-top: 0;
-}
-
-input,
-select,
-button {
-  width: 100%;
-  padding: 13px;
-  margin: 7px 0;
-  border-radius: 10px;
-  border: 1px solid #d1d5db;
-  font-size: 16px;
-}
-
-button {
-  background: #111827;
-  color: white;
-  border: 0;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button.secondary {
-  background: #e5e7eb;
-  color: #111827;
-}
-
-.service-grid {
-  display: grid;
-  grid-template-columns:
-    repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
-}
-
-.service {
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 16px;
+  border: 1px solid #e6e9ef;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 5px 18px #0000000a;
 }
 
 .price {
-  font-weight: bold;
-  font-size: 19px;
-}
-
-.hidden {
-  display: none;
-}
-
-.payment-box {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  padding: 15px;
-  border-radius: 12px;
-  margin-top: 10px;
-}
-
-.message {
-  padding: 12px;
-  border-radius: 10px;
-  margin-top: 10px;
-}
-
-.success {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.error {
-  background: #fee2e2;
-  color: #991b1b;
+  font-weight: 800;
+  font-size: 18px;
+  margin: 12px 0;
 }
 
 .small {
   font-size: 13px;
-  color: #6b7280;
+  color: #667085;
+  line-height: 1.5;
+}
+
+.book {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: #111827;
+  color: white;
+  font-weight: 700;
+  border: 0;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: #0008;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 20;
+}
+
+.modal-box {
+  background: white;
+  border-radius: 20px;
+  padding: 22px;
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.payment {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.hidden {
+  display: none;
 }
 
 </style>
@@ -200,550 +414,276 @@ button.secondary {
 
 <body>
 
-<header>
+<section id="login">
 
-<h1>Ibadan Business Hub</h1>
+<div class="login-box">
 
-<p>Book trusted local services</p>
+<div class="logo">
+IB
+</div>
 
-</header>
+<h1>
+Ibadan Services
+</h1>
 
-<div class="container">
+<p class="muted">
+Sign in to access services, prices and bookings.
+</p>
 
-<div class="card">
-
-<h2>Create Account / Login</h2>
-
-<input
-id="name"
-placeholder="Full name">
-
-<input
-id="email"
-type="email"
-placeholder="Email">
+<div id="step1">
 
 <input
-id="password"
-type="password"
-placeholder="Password">
+id="contact"
+class="field"
+placeholder="Phone number or email">
 
-<button onclick="signup()">
-Create Account
+<button
+class="primary"
+onclick="requestCode()">
+
+Continue
+
+</button>
+
+</div>
+
+<div
+id="step2"
+style="display:none">
+
+<input
+id="code"
+class="field"
+inputmode="numeric"
+maxlength="6"
+placeholder="6-digit verification code">
+
+<button
+class="primary"
+onclick="verifyCode()">
+
+Verify & Continue
+
 </button>
 
 <button
-class="secondary"
-onclick="login()">
-Login
+class="primary"
+style="background:#e9edf3;color:#111827"
+onclick="backLogin()">
+
+Back
+
 </button>
 
-<div id="authMessage"></div>
+</div>
+
+<div id="loginMsg">
+</div>
+
+<p class="note">
+
+A real SMS/email provider must be connected
+before verification codes can be delivered.
+
+</p>
 
 </div>
 
+</section>
 
-<div class="card">
+<section id="app">
 
-<h2>Available Services</h2>
+<div class="top">
 
-<div
-id="services"
-class="service-grid">
+<div class="nav">
+
+<strong>
+Ibadan Services
+</strong>
+
+<button onclick="logout()">
+Log out
+</button>
+
 </div>
 
 </div>
 
+<div class="wrap">
 
-<div
-class="card"
-id="customer">
+<div class="hero">
 
-<h2>Book a Service</h2>
+<h1>
+Find services in Ibadan
+</h1>
 
-<select id="service">
-
-<option value="">
-Select a service
-</option>
-
-</select>
+<p class="muted">
+Browse services and estimated starting prices.
+</p>
 
 <input
-id="customerName"
+id="search"
+class="search"
+placeholder="Search services..."
+oninput="render()">
+
+<div
+id="filters"
+class="filters">
+</div>
+
+</div>
+
+<div
+id="grid"
+class="grid">
+</div>
+
+</div>
+
+</section>
+
+<div
+id="modal"
+class="modal">
+
+<div class="modal-box">
+
+<h2 id="mTitle">
+</h2>
+
+<p
+id="mDesc"
+class="small">
+</p>
+
+<p
+id="mPrice"
+class="price">
+</p>
+
+<input
+id="cName"
+class="field"
 placeholder="Your name">
 
 <input
-id="phone"
+id="cPhone"
+class="field"
 placeholder="Phone number">
 
 <input
-id="address"
+id="cAddress"
+class="field"
 placeholder="Service address">
 
-<button onclick="bookService()">
-Book Service
+<button
+class="book"
+onclick="book()">
+
+Book service
+
 </button>
 
-<div id="bookingMessage"></div>
+<button
+class="book"
+style="margin-top:8px;background:#e9edf3;color:#111827"
+onclick="closeModal()">
 
+Cancel
+
+</button>
+
+<div id="bookMsg">
 </div>
 
+<div
+id="payment"
+class="payment hidden">
 
-<div class="card">
+<strong>
+Payment
+</strong>
 
-<h2>Payment</h2>
-
-<p id="orderText">
-Create a booking first.
+<p class="small">
+Transfer after your booking is created.
 </p>
 
-<select
-id="paymentMethod"
-onchange="showPayment()">
-
-<option value="">
-Choose payment method
-</option>
-
-<option value="bank">
-Bank Transfer / OPay
-</option>
-
-<option value="opay">
-OPay Online
-</option>
-
-</select>
-
-
-<div
-id="bankTransfer"
-class="payment-box hidden">
-
-<h3>Transfer to OPay</h3>
-
 <p>
-<strong>Provider:</strong>
+<b>Provider:</b>
 OPay
 </p>
 
 <p>
-<strong>Account name:</strong>
-${OPAY_ACCOUNT_NAME || "Payment account configured by administrator"}
+<b>Account name:</b>
+${OPAY_ACCOUNT_NAME || "Configured by administrator"}
 </p>
 
 <p>
-<strong>Account number:</strong>
-${OPAY_ACCOUNT_NUMBER || "Payment account configured by administrator"}
+<b>Account number:</b>
+${OPAY_ACCOUNT_NUMBER || "Configured by administrator"}
 </p>
-
-<p class="small">
-After making the transfer, tap the button below.
-This sends a payment notice to the website.
-It does not automatically verify the bank transfer.
-</p>
-
-<button onclick="paymentMade()">
-I Have Made The Transfer
-</button>
-
-</div>
-
-
-<div
-id="opayPayment"
-class="payment-box hidden">
-
-<h3>OPay Online Payment</h3>
-
-<p>
-Online OPay gateway is not connected yet.
-</p>
-
-<p class="small">
-Use Bank Transfer / OPay above until a
-verified payment gateway is connected.
-</p>
-
-</div>
-
-<div id="paymentMessage"></div>
 
 </div>
 
 </div>
 
+</div>
 
 <script>
 
-let currentOrder = null;
+const services =
+${serviceData};
 
-const services = ${safeServices};
+let token =
+localStorage.getItem("ib_token");
 
+let selected = null;
 
-function showMessage(id, text, ok) {
+let category = "All";
 
-  document.getElementById(id).innerHTML =
-    '<div class="message ' +
-    (ok ? 'success' : 'error') +
-    '">' +
-    text +
-    '</div>';
+const categories = [
+  "All",
+  ...new Set(
+    services.map(
+      service => service.category
+    )
+  )
+];
 
-}
+function loginMessage(text, success) {
 
-
-function signup() {
-
-  const name =
-    document.getElementById("name")
-    .value.trim();
-
-  const email =
-    document.getElementById("email")
-    .value.trim();
-
-  const password =
-    document.getElementById("password")
-    .value;
-
-  fetch("/api/signup", {
-
-    method: "POST",
-
-    headers: {
-      "Content-Type":
-        "application/json"
-    },
-
-    body: JSON.stringify({
-      name,
-      email,
-      password
-    })
-
-  })
-
-  .then(response => response.json())
-
-  .then(result => {
-
-    showMessage(
-      "authMessage",
-      result.message,
-      result.success
-    );
-
-  })
-
-  .catch(() => {
-
-    showMessage(
-      "authMessage",
-      "Could not connect to the server.",
-      false
-    );
-
-  });
-
-}
-
-
-function login() {
-
-  const email =
-    document.getElementById("email")
-    .value.trim();
-
-  const password =
-    document.getElementById("password")
-    .value;
-
-  fetch("/api/login", {
-
-    method: "POST",
-
-    headers: {
-      "Content-Type":
-        "application/json"
-    },
-
-    body: JSON.stringify({
-      email,
-      password
-    })
-
-  })
-
-  .then(response => response.json())
-
-  .then(result => {
-
-    showMessage(
-      "authMessage",
-      result.message,
-      result.success
-    );
-
-    if (result.success && result.user) {
-
-      document.getElementById(
-        "customerName"
-      ).value = result.user.name;
-
-    }
-
-  })
-
-  .catch(() => {
-
-    showMessage(
-      "authMessage",
-      "Could not connect to the server.",
-      false
-    );
-
-  });
-
-}
-
-
-function renderServices() {
-
-  const container =
-    document.getElementById("services");
-
-  container.innerHTML =
-    services.map(service => {
-
-      return (
-        '<div class="service">' +
-
-        '<h3>' +
-        service.name +
-        '</h3>' +
-
-        '<p class="price">₦' +
-        service.price.toLocaleString() +
-        '</p>' +
-
-        '<button onclick="selectService(' +
-        service.id +
-        ')">' +
-
-        'Select' +
-
-        '</button>' +
-
-        '</div>'
-      );
-
-    }).join("");
-
-
-  const select =
-    document.getElementById("service");
-
-
-  services.forEach(service => {
-
-    const option =
-      document.createElement("option");
-
-    option.value = service.id;
-
-    option.textContent =
-      service.name +
-      " - ₦" +
-      service.price.toLocaleString();
-
-    select.appendChild(option);
-
-  });
-
-}
-
-
-function selectService(id) {
-
-  document.getElementById(
-    "service"
-  ).value = id;
-
-  document.getElementById(
-    "customer"
-  ).scrollIntoView({
-    behavior: "smooth"
-  });
-
-}
-
-
-function bookService() {
-
-  const serviceId =
-    Number(
-      document.getElementById("service")
-      .value
-    );
-
-  const name =
+  const element =
     document.getElementById(
-      "customerName"
+      "loginMsg"
+    );
+
+  element.className =
+    success ? "ok" : "err";
+
+  element.textContent = text;
+}
+
+function requestCode() {
+
+  const contact =
+    document.getElementById(
+      "contact"
     ).value.trim();
 
-  const phone =
-    document.getElementById(
-      "phone"
-    ).value.trim();
+  if (!contact) {
 
-  const address =
-    document.getElementById(
-      "address"
-    ).value.trim();
-
-
-  if (
-    !serviceId ||
-    !name ||
-    !phone ||
-    !address
-  ) {
-
-    showMessage(
-      "bookingMessage",
-      "Please complete all booking fields.",
+    loginMessage(
+      "Enter your phone number or email.",
       false
     );
 
     return;
   }
-
-
-  fetch("/api/orders", {
-
-    method: "POST",
-
-    headers: {
-      "Content-Type":
-        "application/json"
-    },
-
-    body: JSON.stringify({
-      serviceId,
-      name,
-      phone,
-      address
-    })
-
-  })
-
-  .then(response => response.json())
-
-  .then(result => {
-
-    if (result.success) {
-
-      currentOrder =
-        result.order;
-
-      document.getElementById(
-        "orderText"
-      ).textContent =
-        "Order #" +
-        result.order.id +
-        " created. Amount: ₦" +
-        result.order.amount.toLocaleString();
-
-
-      showMessage(
-        "bookingMessage",
-        result.message,
-        true
-      );
-
-    } else {
-
-      showMessage(
-        "bookingMessage",
-        result.message,
-        false
-      );
-
-    }
-
-  })
-
-  .catch(() => {
-
-    showMessage(
-      "bookingMessage",
-      "Could not create the booking.",
-      false
-    );
-
-  });
-
-}
-
-
-function showPayment() {
-
-  const method =
-    document.getElementById(
-      "paymentMethod"
-    ).value;
-
-
-  document.getElementById(
-    "bankTransfer"
-  ).classList.add("hidden");
-
-
-  document.getElementById(
-    "opayPayment"
-  ).classList.add("hidden");
-
-
-  if (method === "bank") {
-
-    document.getElementById(
-      "bankTransfer"
-    ).classList.remove("hidden");
-
-  }
-
-
-  if (method === "opay") {
-
-    document.getElementById(
-      "opayPayment"
-    ).classList.remove("hidden");
-
-  }
-
-}
-
-
-function paymentMade() {
-
-  if (!currentOrder) {
-
-    showMessage(
-      "paymentMessage",
-      "Please create a booking first.",
-      false
-    );
-
-    return;
-  }
-
 
   fetch(
-    "/api/payment-notice",
+    "/api/request-code",
     {
-
       method: "POST",
 
       headers: {
@@ -752,10 +692,8 @@ function paymentMade() {
       },
 
       body: JSON.stringify({
-        orderId:
-          currentOrder.id
+        contact
       })
-
     }
   )
 
@@ -765,28 +703,400 @@ function paymentMade() {
 
   .then(result => {
 
-    showMessage(
-      "paymentMessage",
+    if (!result.success) {
+
+      loginMessage(
+        result.message,
+        false
+      );
+
+      return;
+    }
+
+    document.getElementById(
+      "step1"
+    ).style.display = "none";
+
+    document.getElementById(
+      "step2"
+    ).style.display = "block";
+
+    loginMessage(
       result.message,
-      result.success
-    );
-
-  })
-
-  .catch(() => {
-
-    showMessage(
-      "paymentMessage",
-      "Could not send payment notice.",
-      false
+      true
     );
 
   });
 
 }
 
+function verifyCode() {
 
-renderServices();
+  const contact =
+    document.getElementById(
+      "contact"
+    ).value.trim();
+
+  const code =
+    document.getElementById(
+      "code"
+    ).value.trim();
+
+  fetch(
+    "/api/verify-code",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json"
+      },
+
+      body: JSON.stringify({
+        contact,
+        code
+      })
+    }
+  )
+
+  .then(response =>
+    response.json()
+  )
+
+  .then(result => {
+
+    if (!result.success) {
+
+      loginMessage(
+        result.message,
+        false
+      );
+
+      return;
+    }
+
+    localStorage.setItem(
+      "ib_token",
+      result.token
+    );
+
+    token =
+      result.token;
+
+    showApp();
+
+  });
+
+}
+
+function backLogin() {
+
+  document.getElementById(
+    "step2"
+  ).style.display = "none";
+
+  document.getElementById(
+    "step1"
+  ).style.display = "block";
+
+  document.getElementById(
+    "loginMsg"
+  ).textContent = "";
+
+}
+
+function showApp() {
+
+  document.getElementById(
+    "login"
+  ).style.display = "none";
+
+  document.getElementById(
+    "app"
+  ).style.display = "block";
+
+  render();
+
+}
+
+function logout() {
+
+  localStorage.removeItem(
+    "ib_token"
+  );
+
+  location.reload();
+
+}
+
+function render() {
+
+  const filters =
+    document.getElementById(
+      "filters"
+    );
+
+  filters.innerHTML =
+    categories.map(
+      categoryName => {
+
+        return (
+          '<button class="chip ' +
+          (categoryName === category
+            ? "active"
+            : "") +
+          '" onclick="setCategory(' +
+          JSON.stringify(
+            categoryName
+          ) +
+          ')">' +
+          categoryName +
+          "</button>"
+        );
+
+      }
+    ).join("");
+
+  const search =
+    document.getElementById(
+      "search"
+    ).value
+    .toLowerCase();
+
+  const list =
+    services.filter(service => {
+
+      const matchesCategory =
+        category === "All" ||
+        service.category ===
+          category;
+
+      const text =
+        (
+          service.name +
+          " " +
+          service.description
+        ).toLowerCase();
+
+      return (
+        matchesCategory &&
+        text.includes(search)
+      );
+
+    });
+
+  document.getElementById(
+    "grid"
+  ).innerHTML =
+    list.map(service => {
+
+      return (
+        '<div class="card">' +
+
+        '<div class="small">' +
+        service.category +
+        "</div>" +
+
+        "<h3>" +
+        service.name +
+        "</h3>" +
+
+        '<p class="small">' +
+        service.description +
+        "</p>" +
+
+        '<div class="price">' +
+        "From ₦" +
+        service.price.toLocaleString() +
+        "</div>" +
+
+        '<button class="book" ' +
+        'onclick="openBook(' +
+        service.id +
+        ')">' +
+
+        "Book service" +
+
+        "</button>" +
+
+        "</div>"
+      );
+
+    }).join("");
+
+}
+
+function setCategory(value) {
+
+  category = value;
+
+  render();
+
+}
+
+function openBook(id) {
+
+  selected =
+    services.find(
+      service =>
+        service.id === id
+    );
+
+  document.getElementById(
+    "mTitle"
+  ).textContent =
+    selected.name;
+
+  document.getElementById(
+    "mDesc"
+  ).textContent =
+    selected.description;
+
+  document.getElementById(
+    "mPrice"
+  ).textContent =
+    "Starting from ₦" +
+    selected.price.toLocaleString();
+
+  document.getElementById(
+    "modal"
+  ).style.display = "flex";
+
+  document.getElementById(
+    "payment"
+  ).classList.add(
+    "hidden"
+  );
+
+  document.getElementById(
+    "bookMsg"
+  ).textContent = "";
+
+}
+
+function closeModal() {
+
+  document.getElementById(
+    "modal"
+  ).style.display = "none";
+
+}
+
+function book() {
+
+  const name =
+    document.getElementById(
+      "cName"
+    ).value.trim();
+
+  const phone =
+    document.getElementById(
+      "cPhone"
+    ).value.trim();
+
+  const address =
+    document.getElementById(
+      "cAddress"
+    ).value.trim();
+
+  if (
+    !name ||
+    !phone ||
+    !address
+  ) {
+
+    document.getElementById(
+      "bookMsg"
+    ).textContent =
+      "Complete your details first.";
+
+    return;
+  }
+
+  fetch(
+    "/api/orders",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        "Authorization":
+          "Bearer " + token
+      },
+
+      body: JSON.stringify({
+
+        serviceId:
+          selected.id,
+
+        name,
+        phone,
+        address
+
+      })
+    }
+  )
+
+  .then(response =>
+    response.json()
+  )
+
+  .then(result => {
+
+    document.getElementById(
+      "bookMsg"
+    ).textContent =
+      result.message;
+
+    if (result.success) {
+
+      document.getElementById(
+        "payment"
+      ).classList.remove(
+        "hidden"
+      );
+
+    }
+
+  });
+
+}
+
+if (token) {
+
+  fetch(
+    "/api/session",
+    {
+      headers: {
+        "Authorization":
+          "Bearer " + token
+      }
+    }
+  )
+
+  .then(response =>
+    response.json()
+  )
+
+  .then(result => {
+
+    if (result.valid) {
+
+      showApp();
+
+    } else {
+
+      localStorage.removeItem(
+        "ib_token"
+      );
+
+    }
+
+  });
+
+}
 
 </script>
 
@@ -794,7 +1104,6 @@ renderServices();
 
 </html>`;
 }
-
 
 const server =
   http.createServer(
@@ -807,8 +1116,6 @@ const server =
           req.url === "/"
         ) {
 
-          const body = page();
-
           res.writeHead(
             200,
             {
@@ -817,196 +1124,229 @@ const server =
             }
           );
 
-          res.end(body);
-
-          return;
+          return res.end(
+            page()
+          );
         }
-
 
         if (
           req.method === "POST" &&
-          req.url === "/api/signup"
+          req.url ===
+            "/api/request-code"
         ) {
 
           const data =
             await readBody(req);
 
-          const name =
-            String(data.name || "")
-            .trim();
-
-          const email =
-            String(data.email || "")
+          const contact =
+            String(
+              data.contact || ""
+            )
             .trim()
             .toLowerCase();
 
-          const password =
-            String(data.password || "");
+          if (!contact) {
 
-
-          if (
-            !name ||
-            !email ||
-            !password
-          ) {
-
-            sendJson(
+            return json(
               res,
               400,
               {
                 success: false,
                 message:
-                  "Please fill in all fields."
+                  "Enter a phone number or email."
               }
             );
-
-            return;
           }
 
-
-          if (
-            users.some(
-              user =>
-                user.email === email
-            )
-          ) {
-
-            sendJson(
-              res,
-              400,
-              {
-                success: false,
-                message:
-                  "An account with this email already exists."
-              }
+          const code =
+            String(
+              Math.floor(
+                100000 +
+                Math.random() *
+                900000
+              )
             );
 
-            return;
-          }
-
-
-          users.push({
-
-            id:
-              crypto.randomUUID(),
-
-            name,
-
-            email,
-
-            password:
-              hashPassword(password)
-
-          });
-
-
-          sendJson(
-            res,
-            201,
+          pending.set(
+            contact,
             {
-              success: true,
-              message:
-                "Account created successfully."
+              code,
+              expires:
+                Date.now() +
+                10 * 60 * 1000
             }
           );
 
-          return;
-        }
+          console.log(
+            "Verification code for",
+            contact,
+            ":",
+            code
+          );
 
-
-        if (
-          req.method === "POST" &&
-          req.url === "/api/login"
-        ) {
-
-          const data =
-            await readBody(req);
-
-          const email =
-            String(data.email || "")
-            .trim()
-            .toLowerCase();
-
-          const password =
-            String(data.password || "");
-
-
-          const user =
-            users.find(
-              item =>
-                item.email === email &&
-                item.password ===
-                  hashPassword(password)
-            );
-
-
-          if (!user) {
-
-            sendJson(
-              res,
-              401,
-              {
-                success: false,
-                message:
-                  "Incorrect email or password."
-              }
-            );
-
-            return;
-          }
-
-
-          sendJson(
+          return json(
             res,
             200,
             {
               success: true,
               message:
-                "Login successful.",
-
-              user: {
-                name: user.name,
-                email: user.email
-              }
+                "Verification code requested."
             }
           );
-
-          return;
         }
-
 
         if (
           req.method === "POST" &&
-          req.url === "/api/orders"
+          req.url ===
+            "/api/verify-code"
         ) {
 
           const data =
             await readBody(req);
 
+          const contact =
+            String(
+              data.contact || ""
+            )
+            .trim()
+            .toLowerCase();
+
+          const entry =
+            pending.get(
+              contact
+            );
+
+          if (
+            !entry ||
+            Date.now() >
+              entry.expires ||
+            String(
+              data.code || ""
+            ) !== entry.code
+          ) {
+
+            return json(
+              res,
+              401,
+              {
+                success: false,
+                message:
+                  "Invalid or expired verification code."
+              }
+            );
+          }
+
+          const token =
+            crypto.randomBytes(
+              24
+            ).toString("hex");
+
+          sessions.set(
+            token,
+            {
+              contact,
+              created:
+                Date.now()
+            }
+          );
+
+          pending.delete(
+            contact
+          );
+
+          return json(
+            res,
+            200,
+            {
+              success: true,
+              token
+            }
+          );
+        }
+
+        if (
+          req.method === "GET" &&
+          req.url ===
+            "/api/session"
+        ) {
+
+          const token =
+            (
+              req.headers.authorization ||
+              ""
+            ).replace(
+              "Bearer ",
+              ""
+            );
+
+          return json(
+            res,
+            200,
+            {
+              valid:
+                sessions.has(
+                  token
+                )
+            }
+          );
+        }
+
+        if (
+          req.method === "POST" &&
+          req.url ===
+            "/api/orders"
+        ) {
+
+          const token =
+            (
+              req.headers.authorization ||
+              ""
+            ).replace(
+              "Bearer ",
+              ""
+            );
+
+          if (
+            !sessions.has(
+              token
+            )
+          ) {
+
+            return json(
+              res,
+              401,
+              {
+                success: false,
+                message:
+                  "Please log in first."
+              }
+            );
+          }
+
+          const data =
+            await readBody(req);
 
           const service =
             services.find(
               item =>
                 item.id ===
-                Number(data.serviceId)
+                Number(
+                  data.serviceId
+                )
             );
-
 
           if (!service) {
 
-            sendJson(
+            return json(
               res,
               400,
               {
                 success: false,
                 message:
-                  "Please select a valid service."
+                  "Service not found."
               }
             );
-
-            return;
           }
-
 
           if (
             !data.name ||
@@ -1014,158 +1354,15 @@ const server =
             !data.address
           ) {
 
-            sendJson(
+            return json(
               res,
               400,
               {
                 success: false,
                 message:
-                  "Please complete all booking fields."
+                  "Complete all booking details."
               }
             );
-
-            return;
           }
 
-
-          const order = {
-
-            id:
-              crypto.randomUUID(),
-
-            serviceId:
-              service.id,
-
-            service:
-              service.name,
-
-            amount:
-              service.price,
-
-            name:
-              String(data.name),
-
-            phone:
-              String(data.phone),
-
-            address:
-              String(data.address),
-
-            paymentStatus:
-              "Pending",
-
-            createdAt:
-              new Date().toISOString()
-
-          };
-
-
-          orders.push(order);
-
-
-          sendJson(
-            res,
-            201,
-            {
-              success: true,
-              message:
-                "Booking created successfully.",
-              order
-            }
-          );
-
-          return;
-        }
-
-
-        if (
-          req.method === "POST" &&
-          req.url ===
-            "/api/payment-notice"
-        ) {
-
-          const data =
-            await readBody(req);
-
-
-          const order =
-            orders.find(
-              item =>
-                item.id ===
-                data.orderId
-            );
-
-
-          if (!order) {
-
-            sendJson(
-              res,
-              404,
-              {
-                success: false,
-                message:
-                  "Order not found."
-              }
-            );
-
-            return;
-          }
-
-
-          order.paymentStatus =
-            "Customer reported transfer";
-
-
-          sendJson(
-            res,
-            200,
-            {
-              success: true,
-              message:
-                "Payment notice received. The transfer still needs to be verified."
-            }
-          );
-
-          return;
-        }
-
-
-        sendJson(
-          res,
-          404,
-          {
-            success: false,
-            message:
-              "Page not found."
-          }
-        );
-
-      } catch (error) {
-
-        console.error(error);
-
-        sendJson(
-          res,
-          500,
-          {
-            success: false,
-            message:
-              "Server error."
-          }
-        );
-
-      }
-
-    }
-  );
-
-
-server.listen(
-  PORT,
-  () => {
-    console.log(
-      "Ibadan Business Hub running on port " +
-      PORT
-    );
-  }
-);
+          const 
